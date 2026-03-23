@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Tapestry Ultimate Fix</title>
+    <style>
+        :root { --p: #d81b60; --s: #00acc1; --bg: #1a1a1a; }
+        body { font-family: sans-serif; background: var(--bg); margin: 0; padding: 0; color: white; overflow: hidden; position: fixed; width: 100%; height: 100%; }
+        
+        /* Setup */
+        #setup { position: fixed; inset: 0; z-index: 3000; padding: 20px; text-align: center; background: white; color: #333; overflow-y: auto; }
+        .grid-inputs { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; max-width: 400px; margin: 0 auto 15px; }
+        input, select { width: 95%; padding: 12px; border: 1px solid #ccc; border-radius: 8px; font-size: 1rem; text-align: center; box-sizing: border-box; }
+
+        /* UI Lavoro */
+        #work-ui { position: relative; z-index: 1000; background: #222; border-bottom: 2px solid var(--p); display: none; }
+        .nav-bar { display: flex; justify-content: space-between; align-items: center; padding: 8px; gap: 5px; }
+        .btn-zoom { background: #555; color: white; border: 1px solid #777; width: 42px; height: 42px; border-radius: 8px; font-size: 1.2rem; }
+        .btn-nav { background: #444; color: white; border: none; padding: 12px; border-radius: 10px; flex: 1; font-weight: bold; font-size: 1rem; }
+
+        /* Legenda e Riassunto */
+        .summary { padding: 8px 12px; font-size: 0.85rem; color: #bbb; background: #2a2a2a; border-top: 1px solid #3d3d3d; overflow-x: auto; white-space: nowrap; }
+        #legenda { background: #333; padding: 12px; overflow-x: auto; display: flex; gap: 8px; border-top: 1px solid #444; }
+        .dot { width: 36px; height: 36px; border-radius: 50%; display: flex; align-items: center; justify-content: center; flex-shrink: 0; font-size: 11px; font-weight: bold; border: 2px solid rgba(255,255,255,0.4); }
+        .dot.done { opacity: 0.15; transform: scale(0.8); }
+
+        /* Area Zoom */
+        #viewport { position: relative; width: 100vw; height: calc(100vh - 240px); overflow: hidden; background: #111; touch-action: none; }
+        #zoom-container { position: absolute; top: 0; left: 0; transform-origin: 0 0; }
+
+        table { border-collapse: collapse; background: white; }
+        td { border: 1px solid #ddd; width: 40px; height: 40px; text-align: center; color: #000; font-weight: bold; font-size: 12px; }
+        .r-idx { background: #444 !important; color: yellow !important; position: sticky; left: 0; z-index: 10; width: 45px !important; }
+        .active-row td { border-top: 3.5px solid yellow !important; border-bottom: 3.5px solid yellow !important; }
+        .dim-row { opacity: 0.1; }
+
+        /* MINI MAPPA */
+        #minimap { position: fixed; right: 15px; bottom: 20px; width: 85px; height: 85px; border: 2px solid gold; border-radius: 12px; z-index: 2000; background: #000; display: none; pointer-events: none; }
+        #minimap canvas { width: 100%; height: 100%; image-rendering: pixelated; border-radius: 10px; }
+
+        .btn-action { padding: 15px; border-radius: 12px; border: 1px solid #eee; background: #f9f9f9; font-size: 1.4rem; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .btn-upload { background: #e3f2fd; border: 2px solid #2196f3; color: #1976d2; font-weight: bold; font-size: 0.9rem; }
+    </style>
+</head>
+<body>
+
+<div id="setup">
+    <h2 style="color:var(--p)">🧶 Tapestry Pro</h2>
+    <div class="grid-inputs">
+        <div><label>Punti/10cm</label><input type="number" id="gW" value="20"></div>
+        <div><label>Righe/10cm</label><input type="number" id="gH" value="20"></div>
+        <div><label>Cm Largh.</label><input type="number" id="cmW" value="15"></div>
+        <div><label>Cm Alt.</label><input type="number" id="cmH" value="15"></div>
+    </div>
+    
+    <label>RIDUZIONE COLORI (FOTO)</label><br>
+    <select id="colorLimit" style="margin-bottom:20px; width:100%; max-width:400px;">
+        <option value="4" selected>4 Colori (Semplice)</option>
+        <option value="8">8 Colori</option>
+        <option value="16">16 Colori</option>
+        <option value="0">Tutti i colori</option>
+    </select>
+
+    <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:12px; max-width:400px; margin:0 auto;">
+        <button class="btn-action" onclick="drawShape('heart')">❤️</button>
+        <button class="btn-action" onclick="drawShape('star')">⭐</button>
+        <button class="btn-action" onclick="drawShape('paws')">🐾</button>
+        <button class="btn-action" onclick="drawShape('circle')">🟡</button>
+        <button class="btn-action" onclick="drawShape('square')">🟦</button>
+        <button class="btn-action btn-upload" onclick="document.getElementById('fileIn').click()">
+            🖼️<br>FOTO
+        </button>
+    </div>
+    <input type="file" id="fileIn" accept="image/*" style="display:none">
+</div>
+
+<div id="work-ui">
+    <div class="nav-bar">
+        <button onclick="location.reload()" style="background:none; border:none; font-size:1.5rem;">⚙️</button>
+        <button class="btn-zoom" onclick="changeZoom(-0.2)">–</button>
+        <button class="btn-zoom" onclick="changeZoom(0.2)">+</button>
+        <button class="btn-nav" onclick="move(-1)">▲ PREC.</button>
+        <div id="rNum" style="font-size:1.6rem; color:yellow; font-weight:bold; min-width:45px; text-align:center;">1</div>
+        <button class="btn-nav" onclick="move(1)" style="background:var(--s)">▼ PROSS.</button>
+    </div>
+    <div id="riassunto" class="summary"></div>
+    <div id="legenda"></div>
+</div>
+
+<div id="viewport">
+    <div id="zoom-container"><table id="main-grid"></table></div>
+</div>
+
+<div id="minimap"><canvas id="mmCanvas"></canvas></div>
+<canvas id="hidden-cv" style="display:none"></canvas>
+
+<script>
+    let gridRows = [];
+    let rIdx = 0;
+    let imgSource = null;
+    let scale = 0.8, posX = 10, posY = 10;
+    let lastDist = 0, startX = 0, startY = 0;
+
+    // Gestore caricamento file foto
+    document.getElementById('fileIn').onchange = (e) => {
+        const file = e.target.files[0];
+        if (!file) return;
+        const reader = new FileReader();
+        reader.onload = (f) => {
+            const img = new Image();
+            img.onload = () => { imgSource = img; generate(); };
+            img.src = f.target.result;
+        };
+        reader.readAsDataURL(file);
+    };
+
+    function drawShape(type) {
+        const tempCv = document.createElement('canvas');
+        const tCtx = tempCv.getContext('2d');
+        tempCv.width = 100; tempCv.height = 100;
+        tCtx.fillStyle = "white"; tCtx.fillRect(0,0,100,100);
+        tCtx.fillStyle = (type==='star'?'gold':(type==='square'?'blue':(type==='circle'?'orange':'red')));
+        if(type==='heart'){ tCtx.beginPath(); tCtx.moveTo(50,80); tCtx.bezierCurveTo(50,78,20,50,20,35); tCtx.bezierCurveTo(20,15,48,15,50,35); tCtx.bezierCurveTo(52,15,80,15,80,35); tCtx.bezierCurveTo(80,50,50,78,50,80); tCtx.fill(); }
+        else if(type==='star'){ tCtx.beginPath(); for(let i=0;i<10;i++){ let r=i%2===0?40:18; let a=Math.PI*2/10*i-Math.PI/2; tCtx.lineTo(50+Math.cos(a)*r, 50+Math.sin(a)*r); } tCtx.fill(); }
+        else if(type==='paws'){ tCtx.beginPath(); tCtx.arc(50,60,25,0,Math.PI*2); tCtx.fill(); tCtx.beginPath(); tCtx.arc(25,35,10,0,Math.PI*2); tCtx.fill(); tCtx.beginPath(); tCtx.arc(50,20,10,0,Math.PI*2); tCtx.fill(); tCtx.beginPath(); tCtx.arc(75,35,10,0,Math.PI*2); tCtx.fill(); }
+        else if(type==='circle'){ tCtx.beginPath(); tCtx.arc(50,50,35,0,Math.PI*2); tCtx.fill(); }
+        else { tCtx.fillRect(25,25,50,50); }
+        imgSource = new Image();
+        imgSource.onload = () => generate();
+        imgSource.src = tempCv.toDataURL();
+    }
+
+    function generate() {
+        if(!imgSource) return;
+        document.getElementById('setup').style.display='none';
+        document.getElementById('work-ui').style.display='block';
+        document.getElementById('minimap').style.display='block';
+        
+        const sW = parseFloat(document.getElementById('gW').value);
+        const sH = parseFloat(document.getElementById('gH').value);
+        const tW = Math.round((parseFloat(document.getElementById('cmW').value)/10)*sW);
+        const tH = Math.round((parseFloat(document.getElementById('cmH').value)/10)*sH);
+
+        const cv = document.getElementById('hidden-cv');
+        const ctx = cv.getContext('2d');
+        cv.width = tW; cv.height = tH;
+        
+        // Disabilita anti-aliasing per pixel art pulita
+        ctx.imageSmoothingEnabled = false;
+        ctx.fillStyle = "white"; ctx.fillRect(0,0,tW,tH);
+        
+        // Adatta l'immagine ai pixel della griglia
+        ctx.drawImage(imgSource, 0, 0, tW, tH);
+
+        // Riduzione Colori
+        const limit = parseInt(document.getElementById('colorLimit').value);
+        const imgData = ctx.getImageData(0,0,tW,tH);
+        if(limit > 0) {
+            const data = imgData.data;
+            const step = 255 / (Math.sqrt(limit));
+            for (let i = 0; i < data.length; i += 4) {
+                data[i] = Math.round(data[i] / step) * step;
+                data[i+1] = Math.round(data[i+1] / step) * step;
+                data[i+2] = Math.round(data[i+2] / step) * step;
+            }
+            ctx.putImageData(imgData, 0, 0);
+        }
+
+        // Mini Mappa
+        const mm = document.getElementById('mmCanvas');
+        mm.width = tW; mm.height = tH;
+        mm.getContext('2d').putImageData(ctx.getImageData(0,0,tW,tH), 0, 0);
+
+        const pix = ctx.getImageData(0,0,tW,tH).data;
+        const table = document.getElementById('main-grid');
+        table.innerHTML = ""; gridRows = [];
+
+        for(let y=0; y<tH; y++) {
+            const tr = document.createElement('tr');
+            const rowArr = [];
+            const th = document.createElement('td'); th.className='r-idx'; th.innerText=(tH-y); tr.appendChild(th);
+            for(let x=0; x<tW; x++) {
+                const i = (y*tW+x)*4;
+                const c = `rgb(${pix[i]},${pix[i+1]},${pix[i+2]})`;
+                const td = document.createElement('td'); td.style.backgroundColor = c; td.innerText = x+1;
+                tr.appendChild(td); rowArr.push(c);
+            }
+            gridRows.push(rowArr); table.appendChild(tr);
+        }
+        rIdx = 0; update(); renderTransform();
+    }
+
+    // GESTIONE ZOOM (Pinch & Pan)
+    const v = document.getElementById('viewport');
+    v.addEventListener('touchstart', e => {
+        if(e.touches.length === 2) {
+            lastDist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+        } else {
+            startX = e.touches[0].pageX - posX; startY = e.touches[0].pageY - posY;
+        }
+    }, {passive: false});
+
+    v.addEventListener('touchmove', e => {
+        e.preventDefault();
+        if(e.touches.length === 2) {
+            const dist = Math.hypot(e.touches[0].pageX - e.touches[1].pageX, e.touches[0].pageY - e.touches[1].pageY);
+            scale = Math.min(Math.max(0.1, scale * (dist / lastDist)), 5);
+            lastDist = dist;
+        } else {
+            posX = e.touches[0].pageX - startX; posY = e.touches[0].pageY - startY;
+        }
+        renderTransform();
+    }, {passive: false});
+
+    function changeZoom(amt) { scale = Math.min(Math.max(0.1, scale + amt), 5); renderTransform(); }
+    function renderTransform() { document.getElementById('zoom-container').style.transform = `translate(${posX}px, ${posY}px) scale(${scale})`; }
+
+    function move(s) {
+        if(rIdx+s >= 0 && rIdx+s < gridRows.length) {
+            rIdx += s; update();
+            const row = document.querySelectorAll('#main-grid tr')[rIdx];
+            posY = -row.offsetTop * scale + 100; renderTransform();
+        }
+    }
+
+    function update() {
+        const rows = document.querySelectorAll('#main-grid tr');
+        rows.forEach((r, i) => r.className = (i === rIdx) ? 'active-row' : 'dim-row');
+        document.getElementById('rNum').innerText = gridRows.length - rIdx;
+        
+        const data = gridRows[rIdx];
+        let dots = "", sumHtml = "RIASSUNTO: ";
+        let count = 1, last = data[0];
+
+        data.forEach((c, i) => {
+            const rgb = c.match(/\d+/g);
+            const br = (rgb[0]*299 + rgb[1]*587 + rgb[2]*114) / 1000;
+            dots += `<div class="dot" onclick="this.classList.toggle('done')" style="background:${c}; color:${br > 125 ? 'black' : 'white'}">${i+1}</div>`;
+            
+            if(i > 0) {
+                if(c === last) count++;
+                else {
+                    sumHtml += `<span style="color:${last}; filter:brightness(1.5); font-weight:bold;"> ● ${count}</span>`;
+                    last = c; count = 1;
+                }
+            }
+        });
+        sumHtml += `<span style="color:${last}; filter:brightness(1.5); font-weight:bold;"> ● ${count}</span>`;
+        document.getElementById('legenda').innerHTML = dots;
+        document.getElementById('riassunto').innerHTML = sumHtml;
+    }
+</script>
+</body>
+</html>
